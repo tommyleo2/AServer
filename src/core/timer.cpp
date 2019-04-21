@@ -12,12 +12,12 @@ TimerHandle::TimerHandle(const PrivateConstruct &, io_context &io,
                          weak_ptr<Timer> &&timer_ref, bool is_repetitive,
                          float wait_time, AServer::function<void()> &&callback)
     : m_io(io),
-      m_timer_ref(std::move(timer_ref)),
       m_is_repetitive(is_repetitive),
       m_wait_time(static_cast<decltype(m_wait_time)::rep>(wait_time * 1000)),
       m_callback(callback),
       m_callback_wrapper([this](const error_code &e) { this->onTriggered(e); }),
-      m_timer_handle(m_io, m_wait_time) {
+      m_timer_handle(m_io, m_wait_time),
+      m_timer_ref(std::move(timer_ref)) {
     m_timer_handle.async_wait(m_callback_wrapper);
 }
 

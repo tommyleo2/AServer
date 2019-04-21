@@ -23,10 +23,6 @@ find_package(Threads REQUIRED)
 set(ALL_DEPENDENCY ${BOOST_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 ################################################################################
 
-message("DEP: ${ALL_DEPENDENCY}")
-message("SRC: ${SOURCE_FILES}")
-message("DIR: ${CMAKE_CURRENT_SOURCE_DIR}/src")
-
 add_executable(
     ${TARGET_NAME}
     main.cpp ${SOURCE_FILES}
@@ -36,3 +32,8 @@ target_link_libraries(
     ${TARGET_NAME}
     ${ALL_DEPENDENCY}
 )
+
+# Compile flags
+################################################################################
+target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra)
+################################################################################
