@@ -1,0 +1,7 @@
+BasedOnStyle: Google
+
+AccessModifierOffset: -2
+AlignTrailingComments: true
+AllowShortFunctionsOnASingleLine: Empty
+IndentWidth: 4
+UseTab: Never
