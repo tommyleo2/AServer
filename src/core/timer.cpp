@@ -8,46 +8,66 @@ using namespace boost::asio;
 
 using error_code = boost::system::error_code;
 
-TimerHandle::TimerHandle(const PrivateConstruct &, io_context &io,
-                         weak_ptr<Timer> &&timer_ref, bool is_repetitive,
+TimerHandle::TimerHandle(const PrivateConstruct &, io_context &io, Timer &timer,
                          float wait_time, AServer::function<void()> &&callback)
     : m_io(io),
-      m_is_repetitive(is_repetitive),
       m_wait_time(static_cast<decltype(m_wait_time)::rep>(wait_time * 1000)),
-      m_callback(callback),
-      m_callback_wrapper([this](const error_code &e) { this->onTriggered(e); }),
+      m_bound_callback(callback),
+      m_callback_wrapper([this](const error_code &e) {
+          if (this->onTimer(e)) {
+              m_timer.onTimerEnded(shared_from_this());
+          }
+      }),
       m_timer_handle(m_io, m_wait_time),
-      m_timer_ref(std::move(timer_ref)) {
+      m_timer(timer) {
     m_timer_handle.async_wait(m_callback_wrapper);
 }
 
-void TimerHandle::onTriggered(const error_code &e) {
-    if (e) {
-        // We must possess a ref to self,
-        // so that it wont be destructed within this block
-        auto self = shared_from_this();
-        m_timer_ref.lock()->onTimerEnded(self);
+void TimerHandle::call() {
+    m_bound_callback();
+}
 
+void TimerHandle::cancel() {
+    m_timer_handle.cancel();
+}
+
+TimerHandle_Once::TimerHandle_Once(const TimerHandle::PrivateConstruct &cp,
+                                   boost::asio::io_context &io, Timer &timer,
+                                   float wait_time,
+                                   AServer::function<void()> &&callback)
+    : TimerHandle(cp, io, timer, wait_time, std::move(callback)) {}
+
+bool TimerHandle_Once::onTimer(const error_code &e) {
+    if (e) {
         if (e.value() != ECANCELED) {
             // TODO: throw
             std::cout << e.message() << std::endl;
         }
-        return;
+        return true;
     }
-    m_callback();
-    if (m_is_repetitive) {
-        m_timer_handle.expires_at(m_timer_handle.expiry() + m_wait_time);
-        m_timer_handle.async_wait(m_callback_wrapper);
-    } else {
-        // We must possess a ref to self,
-        // so that it wont be destructed within this block
-        auto self = shared_from_this();
-        m_timer_ref.lock()->onTimerEnded(self);
-    }
+    this->call();
+    return true;
 }
 
-void TimerHandle::cancel() {
-    this->m_timer_handle.cancel();
+TimerHandle_Repeat::TimerHandle_Repeat(const TimerHandle::PrivateConstruct &cp,
+                                       boost::asio::io_context &io,
+                                       Timer &timer, float wait_time,
+                                       AServer::function<void()> &&callback)
+    : TimerHandle(cp, io, timer, wait_time, std::move(callback)) {}
+
+bool TimerHandle_Repeat::onTimer(const error_code &e) {
+    if (e) {
+        if (e.value() != ECANCELED) {
+            // TODO: throw
+            std::cout << e.message() << std::endl;
+        }
+        return true;
+    }
+    this->call();
+
+    m_timer_handle.expires_at(m_timer_handle.expiry() + m_wait_time);
+    m_timer_handle.async_wait(m_callback_wrapper);
+    return false;
 }
 
 Timer::Timer(const PrivateConstruct &, boost::asio::io_context &io)
@@ -58,7 +78,7 @@ Timer::~Timer() {
 }
 
 AServer::shared_ptr<Timer> Timer::create(boost::asio::io_context &io) {
-    return make_shared<Timer>(PrivateConstruct{}, io);
+    return std::make_shared<Timer>(PrivateConstruct{}, io);
 }
 
 void Timer::onTimerEnded(const shared_ptr<TimerHandle> &handle) {

@@ -18,15 +18,16 @@ class WeakCallable {
         //  Perfect capturing is available in c++20
         //  ugly workaround
         auto call_impl =
-            [callee_object{std::move(callee_object)},
-             member_func = mem_fn(member_func),
-             args = make_tuple(std::forward<ArgTypes>(args)...)]() mutable {
+            [callee_object = std::move(callee_object),
+             member_func = std::mem_fn(member_func),
+             args =
+                 std::make_tuple(std::forward<ArgTypes>(args)...)]() mutable {
                 auto concrete = callee_object.lock();
                 if (concrete) {
                     std::apply(
                         [&](auto &&... args) {
                             member_func(concrete,
-                                        std::forward<decltype(args)>(args)...);
+                                        std::forward<ArgTypes>(args)...);
                         },
                         std::move(args));
                 }

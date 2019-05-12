@@ -17,43 +17,80 @@ class Timer;
 class TimerHandle : public enable_shared_from_this<TimerHandle> {
     friend Timer;
 
-  private:
+  protected:
     struct PrivateConstruct {};
 
   public:
     TimerHandle(const PrivateConstruct &, boost::asio::io_context &io,
-                weak_ptr<Timer> &&timer_ref, bool is_repetitive,
-                float wait_time, function<void()> &&callback);
+                Timer &timer, float wait_time, function<void()> &&callback);
 
+    virtual ~TimerHandle() = default;
+
+    void call();
     void cancel();
 
-  private:
-    template <typename Function, typename... ArgTypes>
-    static shared_ptr<TimerHandle> create(boost::asio::io_context &io,
-                                          weak_ptr<Timer> &&timer_ref,
-                                          bool is_repetitive, float wait_time,
-                                          Function &&callback,
-                                          ArgTypes &&... args) {
-        return std::make_shared<TimerHandle>(
-            PrivateConstruct{}, io, std::move(timer_ref), is_repetitive,
-            wait_time,
-            std::bind(std::forward<Function>(callback),
-                      std::forward<ArgTypes>(args)...));
-    }
+  protected:
+    virtual bool onTimer(const boost::system::error_code &e) = 0;
 
-    void onTriggered(const boost::system::error_code &e);
-
-  private:
+  protected:
     boost::asio::io_context &m_io;
 
-    bool m_is_repetitive;
     chrono::milliseconds m_wait_time;
-    function<void()> m_callback;
+    function<void()> m_bound_callback;
     function<void(const boost::system::error_code &)> m_callback_wrapper;
 
     boost::asio::steady_timer m_timer_handle;
 
-    weak_ptr<Timer> m_timer_ref;
+    Timer &m_timer;
+};
+
+class TimerHandle_Once : public TimerHandle {
+    friend Timer;
+
+  public:
+    TimerHandle_Once(const PrivateConstruct &, boost::asio::io_context &io,
+                     Timer &timer, float wait_time,
+                     function<void()> &&callback);
+
+  protected:
+    template <typename Function, typename... ArgTypes>
+    static shared_ptr<TimerHandle> create(boost::asio::io_context &io,
+                                          Timer &timer, float wait_time,
+                                          Function &&callback,
+                                          ArgTypes &&... args) {
+        return std::make_shared<TimerHandle_Once>(
+            PrivateConstruct{}, io, timer, wait_time,
+            [callback = std::forward<Function>(callback),
+             args =
+                 std::make_tuple(std::forward<ArgTypes>(args)...)]() mutable {
+                std::apply(callback, std::move(args));
+            });
+    }
+    bool onTimer(const boost::system::error_code &e) override;
+};
+
+class TimerHandle_Repeat : public TimerHandle {
+    friend Timer;
+
+  public:
+    TimerHandle_Repeat(const PrivateConstruct &, boost::asio::io_context &io,
+                       Timer &timer, float wait_time,
+                       function<void()> &&callback);
+
+  protected:
+    template <typename Function, typename... ArgTypes>
+    static shared_ptr<TimerHandle> create(boost::asio::io_context &io,
+                                          Timer &timer, float wait_time,
+                                          Function &&callback,
+                                          ArgTypes &&... args) {
+        return std::make_shared<TimerHandle_Repeat>(
+            PrivateConstruct{}, io, timer, wait_time,
+            [callback = std::forward<Function>(callback),
+             args = std::make_tuple(std::forward<ArgTypes>(
+                 args)...)]() mutable { std::apply(callback, args); });
+    }
+
+    bool onTimer(const boost::system::error_code &e) override;
 };
 
 class Timer : public enable_shared_from_this<Timer> {
@@ -70,9 +107,9 @@ class Timer : public enable_shared_from_this<Timer> {
     template <typename Function, typename... ArgTypes>
     weak_ptr<TimerHandle> once(float wait_time, Function &&callback,
                                ArgTypes &&... args) {
-        auto handle = TimerHandle::create(
-            m_io, weak_from_this(), false, wait_time,
-            std::forward<Function>(callback), std::forward<ArgTypes>(args)...);
+        auto handle = TimerHandle_Once::create(m_io, *this, wait_time,
+                                               std::forward<Function>(callback),
+                                               std::forward<ArgTypes>(args)...);
         weak_ptr<TimerHandle> ret(handle);
         m_handles.emplace(std::move(handle));
         return ret;
@@ -81,9 +118,9 @@ class Timer : public enable_shared_from_this<Timer> {
     template <typename Function, typename... ArgTypes>
     weak_ptr<TimerHandle> repeat(float wait_time, Function &&callback,
                                  ArgTypes &&... args) {
-        auto handle = TimerHandle::create(
-            m_io, weak_from_this(), true, wait_time,
-            std::forward<Function>(callback), std::forward<ArgTypes>(args)...);
+        auto handle = TimerHandle_Repeat::create(
+            m_io, *this, wait_time, std::forward<Function>(callback),
+            std::forward<ArgTypes>(args)...);
         weak_ptr<TimerHandle> ret(handle);
         m_handles.emplace(std::move(handle));
         return ret;

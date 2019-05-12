@@ -10,7 +10,7 @@ using namespace boost::asio;
 IOServer::IOServer() : m_io(), m_timer(Timer::create(m_io)) {}
 
 void IOServer::run() {
-    this->getTimer()->once(0, &IOServer::onStart, this);
+    this->getTimer()->once(0, std::mem_fn(&IOServer::onStart), this);
     m_io.run();
     this->onEnd();
 }

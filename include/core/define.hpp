@@ -52,10 +52,10 @@ USING_STD_TYPE(map)
 USING_STD_TYPE(unordered_map)
 USING_STD_TYPE(tuple)
 
-USING_STD_TYPE_FUNC_1(make_unique)
-USING_STD_TYPE_FUNC_1(make_shared)
-USING_STD_TYPE_FUNC_0(make_tuple)
-USING_STD_TYPE_FUNC_0(mem_fn)
+// USING_STD_TYPE_FUNC_1(make_unique)
+// USING_STD_TYPE_FUNC_1(make_shared)
+// USING_STD_TYPE_FUNC_0(make_tuple)
+// USING_STD_TYPE_FUNC_0(mem_fn)
 
 }  // namespace AServer
 
