@@ -12,7 +12,7 @@ TimerHandle::TimerHandle(const PrivateConstruct &, io_context &io, Timer &timer,
                          float wait_time, AServer::function<void()> &&callback)
     : m_io(io),
       m_wait_time(static_cast<decltype(m_wait_time)::rep>(wait_time * 1000)),
-      m_bound_callback(callback),
+      m_bound_callback(std::move(callback)),
       m_callback_wrapper([this](const error_code &e) {
           if (this->onTimer(e)) {
               m_timer.onTimerEnded(shared_from_this());
@@ -65,6 +65,7 @@ bool TimerHandle_Repeat::onTimer(const error_code &e) {
     }
     this->call();
 
+    // FIXME: Use expiry time or current time ?
     m_timer_handle.expires_at(m_timer_handle.expiry() + m_wait_time);
     m_timer_handle.async_wait(m_callback_wrapper);
     return false;

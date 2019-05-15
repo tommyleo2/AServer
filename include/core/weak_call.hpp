@@ -15,25 +15,21 @@ class WeakCallable {
     static WeakCallable create(weak_ptr<ActualClass> &&callee_object,
                                MemberFunction &&member_func,
                                ArgTypes &&... args) {
-        //  Perfect capturing is available in c++20
-        //  ugly workaround
-        auto call_impl =
-            [callee_object = std::move(callee_object),
-             member_func = std::mem_fn(member_func),
-             args =
-                 std::make_tuple(std::forward<ArgTypes>(args)...)]() mutable {
+        return WeakCallable(std::bind(
+            [callee_object(std::move(callee_object)),
+             member_func(std::forward<MemberFunction>(member_func))](
+                auto &&... args) mutable {
                 auto concrete = callee_object.lock();
                 if (concrete) {
-                    std::apply(
-                        [&](auto &&... args) {
-                            member_func(concrete,
-                                        std::forward<ArgTypes>(args)...);
-                        },
-                        std::move(args));
+                    std::invoke(member_func, concrete,
+                                std::forward<decltype(args)>(args)...);
                 }
-            };
-        return WeakCallable(std::move(call_impl));
+            },
+            std::forward<ArgTypes>(args)...));
     }
+
+    WeakCallable(WeakCallable &&) = default;
+    WeakCallable(const WeakCallable &) = default;
 
     inline void operator()() {
         m_call_impl();
@@ -52,7 +48,8 @@ class WeakCallee : public enable_shared_from_this<SelfClass> {
   public:
     template <typename MemberFunction, typename... ArgTypes>
     WeakCallable makeWeakCallable(MemberFunction &&func, ArgTypes &&... args) {
-        return WeakCallable::create(this->weak_from_this(), func,
+        return WeakCallable::create(this->weak_from_this(),
+                                    std::forward<MemberFunction>(func),
                                     std::forward<ArgTypes>(args)...);
     }
 };

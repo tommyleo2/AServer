@@ -60,11 +60,8 @@ class TimerHandle_Once : public TimerHandle {
                                           ArgTypes &&... args) {
         return std::make_shared<TimerHandle_Once>(
             PrivateConstruct{}, io, timer, wait_time,
-            [callback = std::forward<Function>(callback),
-             args =
-                 std::make_tuple(std::forward<ArgTypes>(args)...)]() mutable {
-                std::apply(callback, std::move(args));
-            });
+            std::bind(std::forward<Function>(callback),
+                      std::forward<ArgTypes>(args)...));
     }
     bool onTimer(const boost::system::error_code &e) override;
 };
@@ -85,9 +82,8 @@ class TimerHandle_Repeat : public TimerHandle {
                                           ArgTypes &&... args) {
         return std::make_shared<TimerHandle_Repeat>(
             PrivateConstruct{}, io, timer, wait_time,
-            [callback = std::forward<Function>(callback),
-             args = std::make_tuple(std::forward<ArgTypes>(
-                 args)...)]() mutable { std::apply(callback, args); });
+            std::bind(std::forward<Function>(callback),
+                      std::forward<ArgTypes>(args)...));
     }
 
     bool onTimer(const boost::system::error_code &e) override;
